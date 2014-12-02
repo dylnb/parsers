@@ -1,4 +1,132 @@
 
+/*******************************
+ * Auxiliary Semantic Functions
+ *******************************/
+
+// returns the entity named @name, with all its properties, as instantiated
+// in world @world
+var findw = function(world, name) {
+  return world.filter(function(x){return x.id === name;})[0];
+};
+
+var unit = function(phi) {
+  return function(s) {
+    return function(w) {
+      return [[phi,s]];
+    };
+  };
+};
+
+// state monad bind operator
+var bind = function(m) {
+  return function(k) {
+    return function(s) {
+      return function(w) {
+        return flatten(m(s)(w).map(function(o){return k(o[0])(o[1])(w);}));
+      };
+    };
+  };
+};
+
+var wlift = function(phi) {
+  return function(k) {
+    return function(s) {
+      return function(w) {
+        return k(phi(w))(s)(w);
+      };
+    };
+  };
+};
+
+var constant = function(phi) {
+  return function(w) { return phi; };
+};
+
+// dynamic truth: has at least one true output
+var truth = function(outputs) {
+  return outputs.some(function(o){return o[0];});
+};
+
+
+/****************************
+ * Auxiliary Logic Functions
+ ****************************/
+
+// quick and dirty generalized union
+var flatten = function(things) {
+  return things.reduce(function(thing1, thing2) {
+    return thing1.concat(thing2);
+  }, []);
+};
+
+// check whether two categories are equal
+var cat_equal = function(c1, c2) {
+  // some preconditions for two edges being equal
+  var b = c1.con === c2.con &&
+          c1.targs.length === c2.targs.length;
+  if (b) { // if preconditions met, ...
+    if (c1.con === 'Leaf') { // base case
+      // leaves equal if their concrete types equal
+      return c1.targs[0] === c2.targs[0];
+    } else {
+      // recursively check whether each of c1's type arguments is equal to the
+      // corresponding type argument of c2
+      return c1.targs.every(function(cat, i) {
+        return cat_equal(cat, c2.targs[i]);
+      });
+      // return c1.targs.reduce(function(acc, c1, i) {
+      //   return acc && cat_equal(c1, c2.targs[i]);
+      // }, true);
+    }
+  }
+  // if either preconditions or recursion over targs fails, not equal
+  return false;
+};
+
+// check whether two edges are equal
+var edge_equal = function(e1, e2) {
+  // some preconditions for two edges being equal
+  var b = e1.start === e2.start &&
+          e1.stop === e2.stop &&
+          e1.comb === e2.comb &&
+          e1.daughters.length === e2.daughters.length;
+  if (b) { // if preconditions met, ...
+    if (e1.daughters.length === 0) { // base case
+      // edges equal if they have no daughters
+      return true;
+    } else {
+      // recursively check whether each of e1's daughters is equal to the
+      // corresponding daughter of e2
+      return e1.daughters.every(function(daughter, i) {
+        return edge_equal(daughter, e2.daughters[i]);
+      });
+      // return e1.daughters.reduce(function(acc, d1, i) {
+      //   return acc && edge_equal(d1, e2.daughters[i]);
+      // }, true);
+    }
+  }
+  // if either preconditions of recursion over daughters fails, not equal
+  return false;
+};
+
+// concatenate two lists and remove duplicates
+var union = function(l1, l2) {
+  var flat = l1.concat(l2);
+  return flat.filter(function(value, index, self) {
+    return indexOf(flat, value, edge_equal) === index;
+  });
+};
+
+// return index of (last) occurrence of @v in @l, or -1 if @v not in @l;
+// values are compared by @comp
+var indexOf = function(l, v, comp) {
+  return l.reduce(function(a,b,i) {
+    return comp(b,v) ? i : a;
+  }, -1);
+};
+
+
+
 /*************************
  * Domain, Model, Language
  *************************/
@@ -43,6 +171,14 @@ var cats = {
       {con:'M', targs:[{con:'Leaf', targs:['S']}]},
       {con:'Leaf', targs:['NP']}
     ]
+  },
+  KVP: {
+    con:'K',
+    targs:[
+      {con:'M', targs:[{con:'Leaf', targs:['S']}]},
+      {con:'M', targs:[{con:'Leaf', targs:['S']}]},
+      {con:'B', targs:[{con:'Leaf', targs:['NP']}, {con:'Leaf', targs:['S']}]}
+    ]
   }
 };
 
@@ -51,64 +187,88 @@ var wordMeanings = {
 
   Ann : {
     phn: 'Ann',
-    sem: ann,
-    syn: cats.NP
+    sem: wlift(function(w){return ann;}),
+    syn: cats.KNP
   },
 
   Bob : {
     phn: 'Bob',
-    sem: bob,
-    syn: cats.NP
+    sem: wlift(function(w){return bob;}),
+    syn: cats.KNP
   },
   
   Cal : {
     phn: 'Cal',
-    sem: cal,
-    syn: cats.NP
+    sem: wlift(function(w){return cal;}),
+    syn: cats.KNP
   },
 
   student : {
     phn: 'student',
-    sem: function(x){return function(world){return findw(world, x).student;};},
-    syn: {con:'B', targs:[cats.NP, cats.S]}
+    sem: wlift(function(w){return function(x){return findw(w,x).student;};}),
+    syn: cats.KVP
   },
   
   nice : {
     phn: 'nice',
-    sem: function(x){return function(world){return findw(world, x).nice;};},
-    syn: {con:'B', targs:[cats.NP, cats.S]}
+    sem: wlift(function(w){return function(x){return findw(w,x).nice;};}),
+    syn: cats.KVP
   },
 
   tall : {
     phn: 'tall',
-    sem: function(x){return function(world){return findw(world, x).tall;};},
-    syn: {con:'B', targs:[cats.NP, cats.S]}
+    sem: wlift(function(w){return function(x){return findw(w,x).tall;};}),
+    syn: cats.KVP
   },
 
   likes : { // nice people like nice people; mean people like mean people
     phn: 'likes',
-    sem: function(x) {
-      return function(y) {
-        return function(world) {
-          return findw(world, x).nice === findw(world, y).nice;
+    sem: wlift(function(w) {
+      return function(x) {
+        return function(y) {
+          return findw(w,x).nice === findw(w,y).nice;
+        };
+      };
+    }),
+    syn: {
+      con:'K',
+      targs:[
+        cats.MS,
+        cats.MS,
+        {con:'F', targs:[{con:'B', targs:[cats.NP, cats.S]}, cats.NP]}
+      ]
+    }
+  },
+
+  some : {
+    phn: 'a',
+    sem: function(c) {
+      return function(s) {
+        return function(w) {
+          var outs = domain.map(function(x) {
+            return c(x)(s)(w).filter(function(o){return o[0];})
+                             .map(function(o){return [x,o[1].concat([x])];});
+          });
+          return flatten(outs);
         };
       };
     },
-    syn: {con:'F', targs:[{con:'B', targs:[cats.NP, cats.S]}, cats.NP]}
+    syn: {con:'K', targs:[cats.MNP, cats.MS, cats.NP]}
   },
 
-  somebody : {
-    phn: 'somebody',
-    sem: function(s){return domain.map(function(x){return [x, s.concat([x])];});},
-    syn: cats.MNP
-  },
+  // somebody : {
+  //   phn: 'somebody',
+  //   sem: function(s){return domain.map(function(x){return [x, s.concat([x])];});},
+  //   syn: cats.MNP
+  // },
 
   neg : {
     phn: 'neg',
     sem: function(m) {
       return function(s) {
-        var ms = m(s); // [(prop1, s1), (prop2, s2), ... ]
-        return [[function(world){return !truth(ms, world);}, s]];
+        return function(w) {
+          return [[!truth(m(s)(w)), s]];
+        };
       };
     },
     syn: {con:'F', targs:[cats.MS, cats.MS]}
@@ -119,15 +279,15 @@ var wordMeanings = {
     sem: function(c) {
       return function(k) {
         return function(s) {
-          return [ [
-            function(world) {
-              return domain.every(function(x) {
-                return c(x)(s).every(function(o) {
-                  return !o[0](world) || truth(k(x)(o[1].concat([x])), world);
+          return function(w) {
+            return [ [
+              domain.every(function(x) {
+                return c(x)(s)(w).every(function(o) {
+                  return !o[0] || truth(k(x)(o[1].concat([x]))(w));
                 });
-              });
-            }, s
-          ] ];
+              }), s
+            ] ];
+          };
         };
       };
     },
@@ -138,11 +298,9 @@ var wordMeanings = {
     phn: 'everybody',
     sem: function(k) {
       return function(s) {
-        return [ [
-          function(world) {
-            return domain.every(function(x){return truth(k(x)(s), world);});
-          }, s
-        ] ];
+        return function(w) {
+          return [[domain.every(function(x){return truth(k(x)(s)(w));}), s]];
+        };
       };
     },
     syn: cats.KNP
@@ -155,8 +313,9 @@ var wordMeanings = {
  * Interpretation
  *****************/
 
-// takes in a sentence; returns a distribution over worlds
-var literalListener = function(utterance) {
+// takes in a sentence and context; returns a distribution over worlds
+var literalListener = function(utterance, context) {
+  context = context || [];
   Enumerate(function() {
     // get the meanings of all successful parses of the utterance
     var ms = interpret(utterance).map(function(deriv){return deriv.sem;});
@@ -164,29 +323,30 @@ var literalListener = function(utterance) {
     var disamb = Math.floor(sample(uniformERP, [0, ms.length]));
     var m = ms[disamb];
     // build a random world (with that meaning in mind, so to speak)
-    var world = worldPrior(domain, m);
+    var world = worldPrior(domain, m, context);
     // ignore worlds in which the meaning is false
-    factor(m(world) ? 0 : -Infinity);
+    factor(truth(m(context)(world)) ? 0 : -Infinity);
     return world;
   }, 100);
 };
 
-// takes in a domain of individuals and a proposition;
+// takes in a domain of individuals and a meaning
 // build entities with random properties one at a time, attempting to stay
 // true to the meaning;
 // once all domain individuals have been assigned properties in the world,
 // returns the model
-var worldPrior = function(dom, prop, worldSoFar, prevFactor) {
+var worldPrior = function(dom, meaning, context, worldSoFar, prevFactor) {
   worldSoFar = worldSoFar || [];
   prevFactor = prevFactor || 0;
   if (dom.length !== 0) { // if the model is still missing individuals, ...
     var newObj = makeObj(dom[0]); // randomly attach properties to entity 
     var newWorld = worldSoFar.concat([newObj]); // add new entity to the model
-    var newFactor = prop(newWorld) ? 0: -100; // see if new model is  
-                                                     // consistent with meaning
-    factor(newFactor - prevFactor); // downweight the world if it isn't
-    // continute
-    return worldPrior(dom.slice(1), prop, newWorld, newFactor);
+    // see if new model is consistent with meaning;
+    // if not, downweight this execution path
+    var newFactor = truth(meaning(context)(newWorld)) ? 0: -100;
+    factor(newFactor - prevFactor);
+    // keep on worldbuilding
+    return worldPrior(dom.slice(1), meaning, newWorld, newFactor);
   } else { // once we've built a complete model, return it
     factor(-prevFactor);
     return worldSoFar;
@@ -415,7 +575,7 @@ var combine = function(lsyn, rsyn) {
       rule: '(. unit)',
       sem: function(L) {
         return function(R) {
-          return L(function(s){return [[R,s]];});
+          return L(unit(R));
         };
       },
       cat: lsyn.targs[0]
@@ -425,10 +585,10 @@ var combine = function(lsyn, rsyn) {
   if (rsyn.con === 'B' && rsyn.targs[1].con === 'M' &&
       cat_equal(lsyn, rsyn.targs[1].targs[0])) {
     combs = combs.concat([{
-      rule: '(flip ($) . unit)',
+      rule: '(flip id . unit)',
       sem: function(L) {
         return function(R) {
-          return R(function(s){return [[L,s]];});
+          return R(unit(L));
         };
       },
       cat: rsyn.targs[1]
@@ -459,7 +619,7 @@ var combine = function(lsyn, rsyn) {
         rule: '(mlower $ ' + cmb.rule + ')',
         sem: function(L) {
           return function(R) {
-            return cmb.sem(L)(R)(function(x){return function(s){return [[x,s]];};});
+            return cmb.sem(L)(R)(unit);
           };
         },
         cat: c.targs[0]
@@ -476,109 +636,5 @@ var combine = function(lsyn, rsyn) {
   combs = combs.concat(mlcmbs);
 
   return combs;
-};
-
-
-/*******************************
- * Auxiliary Semantic Functions
- *******************************/
-
-// returns the entity named @name, with all its properties, as instantiated
-// in world @world
-var findw = function(world, name) {
-  return world.filter(function(x){return x.id === name;})[0];
-};
-
-// state monad bind operator
-var bind = function(m) {
-  return function(k) {
-    return function(s) {
-      var ms = m(s); // [[x1,s1], [x2,s2], ...]
-      return flatten(ms.map(function(e){return k(e[0])(e[1]);}));
-    };
-  };
-};
-
-// dynamic truth: has at least one true output
-var truth = function(outputs, world) {
-  return outputs.some(function(o){return o[0](world);});
-};
-
-
-/****************************
- * Auxiliary Logic Functions
- ****************************/
-
-// quick and dirty generalized union
-var flatten = function(things) {
-  return things.reduce(function(thing1, thing2) {
-    return thing1.concat(thing2);
-  }, []);
-};
-
-// check whether two categories are equal
-var cat_equal = function(c1, c2) {
-  // some preconditions for two edges being equal
-  var b = c1.con === c2.con &&
-          c1.targs.length === c2.targs.length;
-  if (b) { // if preconditions met, ...
-    if (c1.con === 'Leaf') { // base case
-      // leaves equal if their concrete types equal
-      return c1.targs[0] === c2.targs[0];
-    } else {
-      // recursively check whether each of c1's type arguments is equal to the
-      // corresponding type argument of c2
-      return c1.targs.every(function(cat, i) {
-        return cat_equal(cat, c2.targs[i]);
-      });
-      // return c1.targs.reduce(function(acc, c1, i) {
-      //   return acc && cat_equal(c1, c2.targs[i]);
-      // }, true);
-    }
-  }
-  // if either preconditions or recursion over targs fails, not equal
-  return false;
-};
-
-// check whether two edges are equal
-var edge_equal = function(e1, e2) {
-  // some preconditions for two edges being equal
-  var b = e1.start === e2.start &&
-          e1.stop === e2.stop &&
-          e1.comb === e2.comb &&
-          e1.daughters.length === e2.daughters.length;
-  if (b) { // if preconditions met, ...
-    if (e1.daughters.length === 0) { // base case
-      // edges equal if they have no daughters
-      return true;
-    } else {
-      // recursively check whether each of e1's daughters is equal to the
-      // corresponding daughter of e2
-      return e1.daughters.every(function(daughter, i) {
-        return edge_equal(daughter, e2.daughters[i]);
-      });
-      // return e1.daughters.reduce(function(acc, d1, i) {
-      //   return acc && edge_equal(d1, e2.daughters[i]);
-      // }, true);
-    }
-  }
-  // if either preconditions of recursion over daughters fails, not equal
-  return false;
-};
-
-// concatenate two lists and remove duplicates
-var union = function(l1, l2) {
-  var flat = l1.concat(l2);
-  return flat.filter(function(value, index, self) {
-    return indexOf(flat, value, edge_equal) === index;
-  });
-};
-
-// return index of (last) occurrence of @v in @l, or -1 if @v not in @l;
-// values are compared by @comp
-var indexOf = function(l, v, comp) {
-  return l.reduce(function(a,b,i) {
-    return comp(b,v) ? i : a;
-  }, -1);
 };
 
