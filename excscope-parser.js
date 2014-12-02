@@ -13,9 +13,9 @@ var domain = [ann, bob, cal];
 
 // demo world
 var w = [
-  {id:ann, blond:true, nice:false, tall:false},
-  {id:bob, blond:true, nice:true, tall:false},
-  {id:cal, blond:true, nice:false, tall:false}
+  {id:ann, student:true, nice:false, tall:false},
+  {id:bob, student:true, nice:true, tall:false},
+  {id:cal, student:true, nice:false, tall:false}
 ];
 
 // abbreviations for syntactic categories
@@ -67,10 +67,10 @@ var wordMeanings = {
     syn: cats.NP
   },
 
-  blond : {
-    phn: 'blond',
-    sem: function(x){return function(world){return findw(world, x).blond;};},
-    syn: {con:'F', targs:[cats.S, cats.NP]}
+  student : {
+    phn: 'student',
+    sem: function(x){return function(world){return findw(world, x).student;};},
+    syn: {con:'B', targs:[cats.NP, cats.S]}
   },
   
   nice : {
@@ -114,6 +114,26 @@ var wordMeanings = {
     syn: {con:'F', targs:[cats.MS, cats.MS]}
   },
 
+  every : {
+    phn: 'every',
+    sem: function(c) {
+      return function(k) {
+        return function(s) {
+          return [ [
+            function(world) {
+              return domain.every(function(x) {
+                return c(x)(s).every(function(o) {
+                  return !o[0](world) || truth(k(x)(o[1].concat([x])), world);
+                });
+              });
+            }, s
+          ] ];
+        };
+      };
+    },
+    syn: {con: 'K', targs: [cats.KNP, cats.MS, cats.NP]}
+  },
+
   everybody : {
     phn: 'everybody',
     sem: function(k) {
@@ -131,9 +151,9 @@ var wordMeanings = {
 };
 
 
-/************************
- * Bayesian Interpreter
- ************************/
+/*****************
+ * Interpretation
+ *****************/
 
 // takes in a sentence; returns a distribution over worlds
 var literalListener = function(utterance) {
@@ -233,7 +253,7 @@ var edgify = function(words) {
       sem: wrd.sem,
       start: i,
       stop: i+1,
-      steps: '',
+      comb: '',
       daughters: []
     };
   });
@@ -264,7 +284,7 @@ var findEdges = function(es) {
           sem: cmb.sem(e1.sem)(e2.sem),
           start: e1.start,
           stop: e2.stop,
-          steps: cmb.rule,
+          comb: cmb.rule,
           daughters: [e1, e2]
         };
       });
@@ -525,7 +545,7 @@ var edge_equal = function(e1, e2) {
   // some preconditions for two edges being equal
   var b = e1.start === e2.start &&
           e1.stop === e2.stop &&
-          e1.steps === e2.steps &&
+          e1.comb === e2.comb &&
           e1.daughters.length === e2.daughters.length;
   if (b) { // if preconditions met, ...
     if (e1.daughters.length === 0) { // base case
