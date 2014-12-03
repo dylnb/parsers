@@ -19,6 +19,7 @@ var unit = function(phi) {
 
 // State.List.Reader bind operator
 var bind = function(m) {
+  // \k s w -> concat [k x s' w | (x,s') <- m s w]
   return function(k) {
     return function(s) {
       return function(w) {
@@ -40,8 +41,7 @@ var wlift = function(phi) {
   };
 };
 
-// returns the constant function from worlds to phi (makes phi a rigid
-// designator)
+// returns the constant function from worlds to phi
 var constant = function(phi) {
   return function(w) { return phi; };
 };
@@ -56,7 +56,7 @@ var truth = function(outputs) {
  * Auxiliary Logic Functions
  ****************************/
 
-// quick and dirty generalized union
+// simple generlaized union
 var flatten = function(things) {
   return things.reduce(function(thing1, thing2) {
     return thing1.concat(thing2);
@@ -111,23 +111,20 @@ var edge_equal = function(e1, e2) {
 var union = function(l1, l2) {
   var flat = l1.concat(l2);
   return flat.filter(function(value, index) {
-    return indexOf(flat, value, edge_equal) === index;
+    return indexOfBy(flat, value, edge_equal) === index;
   });
 };
 
 // return index of (last) occurrence of v in l, or -1 if v not in l;
-// values compared by user-supplied method, or === as default
-var indexOf = function(l, v, comp) {
+// values compared by supplied method, or === as default
+var indexOfBy = function(l, v, comp) {
   comp = comp || function(x,y){return x === y;};
-  return l.reduce(function(a,b,i) {
-    return comp(b,v) ? i : a;
-  }, -1);
+  return l.reduce(function(a,b,i){return comp(b,v) ? i : a;}, -1);
 };
 
-// close a set under transitive applications of a binary operation
+// iteratively apply an operation 'op' to a set 'oldl' until it doesn't
+// generate anything new
 var closeUnder = function(op, oldl) {
-  // iteratively apply an operation 'op' to a set 'oldl' until nothing new
-  // generated
   var newl = union(oldl, op(oldl)); 
   return (newl.length === oldl.length) ? oldl : closeUnder(op, newl);
 };
@@ -403,7 +400,7 @@ var makeObj = function(name) {
 
 // parse an utterance into a list of lexical items;
 // return the final denotations of any successful derivations with cateogry
-// asCategory, which defaults to S
+// asCategory, which defaults to cats.MS
 var interpret = function(utterance, asCategory) {
   asCategory = asCategory || cats.MS;
   var words = parse(utterance);
@@ -414,21 +411,18 @@ var interpret = function(utterance, asCategory) {
   var initial_edges = edgify(defined_words);
   // iterate combining until nothing left to combine
   var all_edges = closeUnder(findEdges, initial_edges);
-  // keep only those edges that span all of the words, and form a sentence
-  var full_cats = all_edges.filter(function(e) {
+  // keep only those edges that span all of the words, and form the right
+  // cateogry
+  return all_edges.filter(function(e) {
     var full = e.stop - e.start === defined_words.length; 
     var cat = cat_equal(e.cat, asCategory);
     return full && cat;
   });
-  // return the meanings of those edges
-  return full_cats;
 };
 
 // convert a string into a list of lexical items
 var parse = function(utterance) {
-  return utterance.split(' ').map(function(wrd) {
-    return lookupWord(wrd);
-  });
+  return utterance.split(' ').map(lookupWord);
 };
 
 // retrieve a word's lexical entry from the fragment dictionary
@@ -487,7 +481,7 @@ var findEdges = function(es) {
   return new_edges;
 };
 
-// attempt to combine two edges, using fixed suite of binary combinators
+// attempt to combine two edges, using fixed suite of combinators
 var combine = function(lsyn, rsyn) {
   var combs = [];
   var cmbs; // potential inner combinations (for recursive combinators)
@@ -514,15 +508,19 @@ var combine = function(lsyn, rsyn) {
 
   // Right Lift
   if (lsyn.con === 'K') {
+    // lift the right arg one level; then try to combine left and right
     cmbs = combine(lsyn.targs[2], rsyn);
     if (cmbs.length !== 0) {
       rcmbs = cmbs.map(function(cmb) {
         return {
           rule: '(liftM2 ' + cmb.rule + ' L (lift R))',
-          sem: function(L) {
+          // \l r -> do x <- l
+          //            y <- return r
+          //            return (cmb.sem x y)
+          sem: function(L) { 
             return function(R) {
               return function(k) {
-                return L(function(y){return k(cmb.sem(y)(R));});
+                return L(function(x){return k(cmb.sem(x)(R));});
               };
             };
           },
@@ -534,11 +532,15 @@ var combine = function(lsyn, rsyn) {
   }
   // Left Lift
   if (rsyn.con === 'K') {
+    // lift the left arg one level; then try to combine left and right
     cmbs = combine(lsyn, rsyn.targs[2]);
     if (cmbs.length !== 0) {
       rcmbs = cmbs.map(function(cmb) {
         return {
           rule: '(liftM2 ' + cmb.rule + ' (lift L) R)',
+          // \l r -> do x <- return l
+          //            y <- r
+          //            return (cmb.sem x y)
           sem: function(L) {
             return function(R) {
               return function(k) {
@@ -556,8 +558,10 @@ var combine = function(lsyn, rsyn) {
   // Right Unit
   if (lsyn.con === 'F' && lsyn.targs[1].con === 'M' &&
       cat_equal(lsyn.targs[1].targs[0], rsyn)) {
+    // inject the right arg into the monad; then try to combine left and right
     combs = combs.concat([{
       rule: '(. unit)',
+      // \l r -> l (unit r)
       sem: function(L) {
         return function(R) {
           return L(unit(R));
@@ -569,8 +573,10 @@ var combine = function(lsyn, rsyn) {
   // Left Unit
   if (rsyn.con === 'B' && rsyn.targs[0].con === 'M' &&
       cat_equal(lsyn, rsyn.targs[0].targs[0])) {
+    // inject the left arg into the monad; then try to combine left and right
     combs = combs.concat([{
       rule: '(flip id . unit)',
+      // \l r -> r (unit l)
       sem: function(L) {
         return function(R) {
           return R(unit(L));
@@ -582,11 +588,16 @@ var combine = function(lsyn, rsyn) {
 
   // Lower
   lcmbs = combs.map(function(cmb) {
+    // plug a continuation into a tower (either id or unit, depending on types)
     var c = cmb.cat;
-    if (c.con === 'K') { // 2-level tower
-      if (cat_equal(c.targs[1], c.targs[2])) { // stateful thing on bottom
+    if (c.con === 'K') {
+      if (cat_equal(c.targs[1], c.targs[2])) {
+      // stateful thing on bottom of 2-level tower (probably);
+      // go ahead and combine two args however they can be combined, then pass
+      // in identity continuation
         return {
           rule: '(lower1 $ ' + cmb.rule + ')',
+          // \l r -> cmb.sem l r id
           sem: function(L) {
             return function(R) {
               return cmb.sem(L)(R)(function(m){return m;});
@@ -597,8 +608,12 @@ var combine = function(lsyn, rsyn) {
       }
       if (c.con === 'K' && c.targs[1].con == 'M' &&
           cat_equal(c.targs[1].targs[0], c.targs[2])) {
+        // non-stateful thing on bottom of tower (probably);
+        // combine two args however they can be combined, then pass in unit
+        // continuation
         return {
           rule: '(mlower $ ' + cmb.rule + ')',
+          // \l r -> cmb.sem l r unit
           sem: function(L) {
             return function(R) {
               return cmb.sem(L)(R)(unit);
@@ -618,8 +633,12 @@ var combine = function(lsyn, rsyn) {
     var c = cmb.cat;
     if (rs[0].indexOf('lower') === 1) {
       if (c.con === 'M') {
+        // if tower was just lowered and is now stateful,
+        // pass the two args into cmb.sem (which combines them and lowers the
+        // result), then lift it back up
         return {
           rule: '(reset1 ' + rs.slice(1).join(' ') + ')',
+          // \l r k -> cmb.sem l r >>= k
           sem: function(L) {
             return function(R) {
               return bind(cmb.sem(L)(R));
