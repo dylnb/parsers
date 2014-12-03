@@ -3,12 +3,12 @@
  * Auxiliary Semantic Functions
  *******************************/
 
-// returns the entity named @name, with all its properties, as instantiated
-// in world @world
+// returns a world's instance of name, with all its properties in that world
 var findw = function(world, name) {
   return world.filter(function(x){return x.id === name;})[0];
 };
 
+// State.List.Reader unit operator
 var unit = function(phi) {
   return function(s) {
     return function(w) {
@@ -17,7 +17,7 @@ var unit = function(phi) {
   };
 };
 
-// state monad bind operator
+// State.List.Reader bind operator
 var bind = function(m) {
   return function(k) {
     return function(s) {
@@ -28,6 +28,8 @@ var bind = function(m) {
   };
 };
 
+// lift some intensional (w -> a) function through the
+// Reader, List, State, and Cont monads
 var wlift = function(phi) {
   return function(k) {
     return function(s) {
@@ -38,6 +40,8 @@ var wlift = function(phi) {
   };
 };
 
+// returns the constant function from worlds to phi (makes phi a rigid
+// designator)
 var constant = function(phi) {
   return function(w) { return phi; };
 };
@@ -74,9 +78,6 @@ var cat_equal = function(c1, c2) {
       return c1.targs.every(function(cat, i) {
         return cat_equal(cat, c2.targs[i]);
       });
-      // return c1.targs.reduce(function(acc, c1, i) {
-      //   return acc && cat_equal(c1, c2.targs[i]);
-      // }, true);
     }
   }
   // if either preconditions or recursion over targs fails, not equal
@@ -100,9 +101,6 @@ var edge_equal = function(e1, e2) {
       return e1.daughters.every(function(daughter, i) {
         return edge_equal(daughter, e2.daughters[i]);
       });
-      // return e1.daughters.reduce(function(acc, d1, i) {
-      //   return acc && edge_equal(d1, e2.daughters[i]);
-      // }, true);
     }
   }
   // if either preconditions of recursion over daughters fails, not equal
@@ -112,19 +110,27 @@ var edge_equal = function(e1, e2) {
 // concatenate two lists and remove duplicates
 var union = function(l1, l2) {
   var flat = l1.concat(l2);
-  return flat.filter(function(value, index, self) {
+  return flat.filter(function(value, index) {
     return indexOf(flat, value, edge_equal) === index;
   });
 };
 
-// return index of (last) occurrence of @v in @l, or -1 if @v not in @l;
-// values are compared by @comp
+// return index of (last) occurrence of v in l, or -1 if v not in l;
+// values compared by user-supplied method, or === as default
 var indexOf = function(l, v, comp) {
+  comp = comp || function(x,y){return x === y;};
   return l.reduce(function(a,b,i) {
     return comp(b,v) ? i : a;
   }, -1);
 };
 
+// close a set under transitive applications of a binary operation
+var closeUnder = function(op, oldl) {
+  // iteratively apply an operation 'op' to a set 'oldl' until nothing new
+  // generated
+  var newl = union(oldl, op(oldl)); 
+  return (newl.length === oldl.length) ? oldl : closeUnder(op, newl);
+};
 
 
 /*************************
@@ -146,7 +152,7 @@ var w = [
   {id:cal, student:true, nice:false, tall:false}
 ];
 
-// abbreviations for syntactic categories
+// abbreviations for syntactic categories (really semantic types)
 var cats = {
   NP: {
     con:'Leaf',
@@ -156,6 +162,10 @@ var cats = {
     con:'Leaf',
     targs:['S']
   },
+  VP: {
+    con:'B',
+    targs:[{con:'Leaf', targs:['NP']}, {con:'Leaf', targs:['S']}]
+  },
   MNP: {
     con:'M',
     targs:[{con:'Leaf', targs:['NP']}]
@@ -164,12 +174,26 @@ var cats = {
     con:'M',
     targs:[{con:'Leaf', targs:['S']}]
   },
+  MVP: {
+    con:'M',
+    targs:[
+      {con:'B', targs:[{con:'Leaf', targs:['NP']}, {con:'Leaf', targs:['S']}]}
+    ]
+  },
   KNP: {
     con:'K',
     targs:[
       {con:'M', targs:[{con:'Leaf', targs:['S']}]},
       {con:'M', targs:[{con:'Leaf', targs:['S']}]},
       {con:'Leaf', targs:['NP']}
+    ]
+  },
+  KS: {
+    con:'K',
+    targs:[
+      {con:'M', targs:[{con:'Leaf', targs:['S']}]},
+      {con:'M', targs:[{con:'Leaf', targs:['S']}]},
+      {con:'Leaf', targs:['S']}
     ]
   },
   KVP: {
@@ -241,9 +265,9 @@ var wordMeanings = {
   },
 
   some : {
-    phn: 'a',
+    phn: 'some',
     sem: function(c) {
-      return function(s) {
+      var _somec = function(s) {
         return function(w) {
           var outs = domain.map(function(x) {
             return c(x)(s)(w).filter(function(o){return o[0];})
@@ -252,15 +276,23 @@ var wordMeanings = {
           return flatten(outs);
         };
       };
+      return bind(_somec);
     },
-    syn: {con:'K', targs:[cats.MNP, cats.MS, cats.NP]}
+    syn: {con:'K', targs:[cats.KNP, cats.MS, cats.NP]}
   },
 
-  // somebody : {
-  //   phn: 'somebody',
-  //   sem: function(s){return domain.map(function(x){return [x, s.concat([x])];});},
-  //   syn: cats.MNP
-  // },
+  somebody : {
+    phn: 'somebody',
+    sem: function(k) {
+      var _somebody = function(s) {
+        return function(w) {
+          return domain.map(function(x){return [x, s.concat([x])];});
+        };
+      };
+      return bind(_somebody)(k);
+    },
+    syn: cats.KNP
+  },
 
   neg : {
     phn: 'neg',
@@ -313,7 +345,8 @@ var wordMeanings = {
  * Interpretation
  *****************/
 
-// takes in a sentence and context; returns a distribution over worlds
+// takes in a sentence and discourse context;
+// searches for worlds that make the sentence true in the context
 var literalListener = function(utterance, context) {
   context = context || [];
   Enumerate(function() {
@@ -330,12 +363,12 @@ var literalListener = function(utterance, context) {
   }, 100);
 };
 
-// takes in a domain of individuals and a meaning
-// build entities with random properties one at a time, attempting to stay
-// true to the meaning;
-// once all domain individuals have been assigned properties in the world,
-// returns the model
+// takes in a domain of individuals and a meaning (and possibly a context);
+// builds a model by adding entities with random properties one at a time,
+// attempting to stay true to the meaning (in the context);
+// returns the model once all domain individuals have been assigned properties
 var worldPrior = function(dom, meaning, context, worldSoFar, prevFactor) {
+  context = context || [];
   worldSoFar = worldSoFar || [];
   prevFactor = prevFactor || 0;
   if (dom.length !== 0) { // if the model is still missing individuals, ...
@@ -353,11 +386,11 @@ var worldPrior = function(dom, meaning, context, worldSoFar, prevFactor) {
   }
 };
 
-// takes in name; returns an entity with random properties;
+// build an entity with random properties
 var makeObj = function(name) {
   return {
     id: name,
-    blond: flip(0.5),
+    student: flip(0.5),
     nice: flip(0.5),
     tall: flip(0.5)
   };
@@ -368,9 +401,8 @@ var makeObj = function(name) {
  * Grammar, Semantics
  *********************/
 
-// takes in an utterance; parses it into a list of lexical items;
-// returns the final denotations of any successful sentence-sized derivations
-// built out of those items
+// parse an utterance into a list of lexical items;
+// return the final denotations of any successful sentence-sized derivations
 var interpret = function(utterance) {
   var words = parse(utterance);
   // ignore undefined words
@@ -391,7 +423,7 @@ var interpret = function(utterance) {
   return full_sentences;
 };
 
-// takes in a string; returns a list of lexical items
+// convert a string into a list of lexical items
 var parse = function(utterance) {
   return utterance.split(' ').map(function(wrd) {
     return lookupWord(wrd);
@@ -404,7 +436,7 @@ var lookupWord = function(word) {
   return m || {phn: word, syn: '', sem: undefined};
 };
 
-// convert list of lexical entries to list of trivial edges
+// convert a list of lexical entries to a list of trivial edges
 var edgify = function(words) {
   return words.map(function(wrd, i) {
     return {
@@ -454,19 +486,11 @@ var findEdges = function(es) {
   return new_edges;
 };
 
-// close a set under an operation
-var closeUnder = function(op, oldl) {
-  // iteratively apply an operation 'op' to a set 'oldl' until nothing new
-  // generated
-  var newl = union(oldl, op(oldl)); 
-  return (newl.length === oldl.length) ? oldl : closeUnder(op, newl);
-};
-
 // attempt to combine two edges, using fixed suite of binary combinators
 var combine = function(lsyn, rsyn) {
   var combs = [];
-  var cmbs; // potential inner combinations (for 2-step combinators)
-  var rcmbs; // potential recursive combinations (for 2-step combinators)
+  var cmbs; // potential inner combinations (for recursive combinators)
+  var rcmbs; // inner combinations lifted to higher towers
   var lcmbs; // potential lowered combinations
   
   // Forward Application
@@ -478,7 +502,7 @@ var combine = function(lsyn, rsyn) {
     }]);
   }
   // Backward Application
-  if (rsyn.con === 'B' && cat_equal(rsyn.targs[0], lsyn)) {
+  if (rsyn.con === 'B' && cat_equal(lsyn, rsyn.targs[0])) {
     combs = combs.concat([{
       rule: '(flip id)',
       sem: function(L){return function(R){return R(L);};},
@@ -527,46 +551,46 @@ var combine = function(lsyn, rsyn) {
     }
   }
 
-  // Right MLift
-  if (rsyn.con === 'M') {
-    cmbs = combine(lsyn, rsyn.targs[0]);
-    if (cmbs.length !== 0) {
-      rcmbs = cmbs.map(function(cmb) {
-        return {
-          rule: '(liftM2 ' + cmb.rule + ' (lift L) (mlift R))',
-          sem: function(L) {
-            return function(R) {
-              return function(k) {
-                return bind(R)(function(y){return k(cmb.sem(L)(y));});
-              };
-            };
-          },
-          cat: {con:'K', targs:[cats.MS, cats.MS, cmb.cat]}
-        };
-      });
-      combs = combs.concat(rcmbs);
-    }
-  }
-  // Left MLift
-  if (lsyn.con === 'M') {
-    cmbs = combine(lsyn.targs[0], rsyn);
-    if (cmbs.length !== 0) {
-      rcmbs = cmbs.map(function(cmb) {
-        return {
-          rule: '(liftM2 ' + cmb.rule + ' (mlift L) (lift R))',
-          sem: function(L) {
-            return function(R) {
-              return function(k) {
-                return bind(L)(function(x){return k(cmb.sem(x)(R));});
-              };
-            };
-          },
-          cat: {con:'K', targs:[cats.MS, cats.MS, cmb.cat]}
-        };
-      });
-      combs = combs.concat(rcmbs);
-    }
-  }
+  // // Right MLift
+  // if (rsyn.con === 'M') {
+  //   cmbs = combine(lsyn, rsyn.targs[0]);
+  //   if (cmbs.length !== 0) {
+  //     rcmbs = cmbs.map(function(cmb) {
+  //       return {
+  //         rule: '(liftM2 ' + cmb.rule + ' (lift L) (mlift R))',
+  //         sem: function(L) {
+  //           return function(R) {
+  //             return function(k) {
+  //               return bind(R)(function(y){return k(cmb.sem(L)(y));});
+  //             };
+  //           };
+  //         },
+  //         cat: {con:'K', targs:[cats.MS, cats.MS, cmb.cat]}
+  //       };
+  //     });
+  //     combs = combs.concat(rcmbs);
+  //   }
+  // }
+  // // Left MLift
+  // if (lsyn.con === 'M') {
+  //   cmbs = combine(lsyn.targs[0], rsyn);
+  //   if (cmbs.length !== 0) {
+  //     rcmbs = cmbs.map(function(cmb) {
+  //       return {
+  //         rule: '(liftM2 ' + cmb.rule + ' (mlift L) (lift R))',
+  //         sem: function(L) {
+  //           return function(R) {
+  //             return function(k) {
+  //               return bind(L)(function(x){return k(cmb.sem(x)(R));});
+  //             };
+  //           };
+  //         },
+  //         cat: {con:'K', targs:[cats.MS, cats.MS, cmb.cat]}
+  //       };
+  //     });
+  //     combs = combs.concat(rcmbs);
+  //   }
+  // }
 
   // Right Unit
   if (lsyn.con === 'F' && lsyn.targs[1].con === 'M' &&
@@ -582,8 +606,8 @@ var combine = function(lsyn, rsyn) {
     }]);
   }
   // Left Unit
-  if (rsyn.con === 'B' && rsyn.targs[1].con === 'M' &&
-      cat_equal(lsyn, rsyn.targs[1].targs[0])) {
+  if (rsyn.con === 'B' && rsyn.targs[0].con === 'M' &&
+      cat_equal(lsyn, rsyn.targs[0].targs[0])) {
     combs = combs.concat([{
       rule: '(flip id . unit)',
       sem: function(L) {
@@ -595,46 +619,76 @@ var combine = function(lsyn, rsyn) {
     }]);
   }
 
-  // Lower 
+  // Lower
   lcmbs = combs.map(function(cmb) {
     var c = cmb.cat;
-    if (c.con === 'K' && cat_equal(c.targs[1], c.targs[2])) {
-      return {
-        rule: '(lower $ ' + cmb.rule + ')',
-        sem: function(L) {
-          return function(R) {
-            return cmb.sem(L)(R)(function(x){return x;});
-          };
-        },
-        cat: c.targs[0]
-      };
+    if (c.con === 'K') { // 2-level tower
+      if (cat_equal(c.targs[1], c.targs[2])) { // stateful thing on bottom
+        return {
+          rule: '(lower1 $ ' + cmb.rule + ')',
+          sem: function(L) {
+            return function(R) {
+              return cmb.sem(L)(R)(function(m){return m;});
+            };
+          },
+          cat: c.targs[0]
+        };
+      }
+      if (c.con === 'K' && c.targs[1].con == 'M' &&
+          cat_equal(c.targs[1].targs[0], c.targs[2])) {
+        return {
+          rule: '(mlower $ ' + cmb.rule + ')',
+          sem: function(L) {
+            return function(R) {
+              return cmb.sem(L)(R)(unit);
+            };
+          },
+          cat: c.targs[0]
+        };
+      }
     }
   });
-  // MLower
-  mlcmbs = combs.map(function(cmb) {
-    var c = cmb.cat;
-    if (c.con === 'K' && c.targs[1].con == 'M' &&
-        cat_equal(c.targs[1].targs[0], c.targs[2])) {
-      return {
-        rule: '(mlower $ ' + cmb.rule + ')',
-        sem: function(L) {
-          return function(R) {
-            return cmb.sem(L)(R)(unit);
-          };
-        },
-        cat: c.targs[0]
-      };
-    }
-  });
 
-  // ditch any Lower operations that aren't defined
-  lcmbs = lcmbs.filter(function(x){return x;});
-  combs = combs.concat(lcmbs);
+      // if (c.targs[2].con === 'K' &&
+      //     c.targs[2].targs[1].con === 'M') { // 3-level tower
+      //   if (cat_equal(c.targs[1], c.targs[2].targs[0]) &&
+      //       cat_equal(c.targs[2].targs[1].targs[0], c.targs[2].targs[2])) {
+      //     return {
+      //       rule: '(lower2 $ ' + cmb.rule + ')',
+      //       sem: function(L) {
+      //         return function(R) {
+      //           return cmb.sem(L)(R)(function(m){return m(unit);});
+      //         };
+      //       },
+      //       cat: c.targs[0]
+      //     };
+      //   }
+      //   if (c.targs[2].targs[2].con === 'K' &&
+      //       c.targs[2].targs[2].targs[1].con === 'M') { // 4-level tower
+      //     if (cat_equal(c.targs[1], c.targs[2].targs[0]) &&
+      //         cat_equal(c.targs[2].targs[1], c.targs[2].targs[2].targs[0]) &&
+      //         cat_equal(c.targs[2].targs[2].targs[1].targs[0],
+      //                   c.targs[2].targs[2].targs[2])) {
+      //       return {
+      //         rule: '(lower3 $ ' + cmb.rule + ')',
+      //         sem: function(L) {
+      //          return function(R) {
+      //             return cmb.sem(L)(R)(function(M) {
+      //               return M(function(m){return m(unit);});
+      //             });
+      //           };
+      //         },
+      //         cat: c.targs[0]
+      //       };
+      //     }
+      //   }
+      // }
+    // }
+  // });
 
-  // ditch any MLower combinations that aren't defined
-  mlcmbs = mlcmbs.filter(function(x){return x;});
-  combs = combs.concat(mlcmbs);
-
+  // ditch any Lower operations that aren't defined; keep the rest
+  combs = combs.concat(lcmbs.filter(function(x){return x;}));
+  // return the combinations
   return combs;
 };
 
