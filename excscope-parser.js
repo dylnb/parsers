@@ -224,6 +224,19 @@ var wordMeanings = {
     syn: cats.KNP
   },
 
+  pro0 : {
+    phn: 'pro0',
+    sem: function(k) {
+      var _pro0 = function(s) {
+        return function(w) {
+          return [[s[s.length - 1], s]];
+        };
+      };
+      return bind(_pro0)(k);
+    },
+    syn: cats.KNP
+  },
+
   student : {
     phn: 'student',
     sem: wlift(function(w){return function(x){return findw(w,x).student;};}),
