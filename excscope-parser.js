@@ -402,8 +402,10 @@ var makeObj = function(name) {
  *********************/
 
 // parse an utterance into a list of lexical items;
-// return the final denotations of any successful sentence-sized derivations
-var interpret = function(utterance) {
+// return the final denotations of any successful derivations with cateogry
+// asCategory, which defaults to S
+var interpret = function(utterance, asCategory) {
+  asCategory = asCategory || cats.MS;
   var words = parse(utterance);
   // ignore undefined words
   var defined_words = words.filter(function(wrd){return wrd.sem;});
@@ -413,14 +415,13 @@ var interpret = function(utterance) {
   // iterate combining until nothing left to combine
   var all_edges = closeUnder(findEdges, initial_edges);
   // keep only those edges that span all of the words, and form a sentence
-  var full_sentences = all_edges.filter(function(e) {
+  var full_cats = all_edges.filter(function(e) {
     var full = e.stop - e.start === defined_words.length; 
-    var sentence = e.cat.con === 'M' && e.cat.targs[0].targs[0] === 'S' ||
-                   e.cat.con === 'Leaf' && e.cat.targs[0] === 'S';
-    return full && sentence;
+    var cat = cat_equal(e.cat, asCategory);
+    return full && cat;
   });
   // return the meanings of those edges
-  return full_sentences;
+  return full_cats;
 };
 
 // convert a string into a list of lexical items
@@ -492,6 +493,7 @@ var combine = function(lsyn, rsyn) {
   var cmbs; // potential inner combinations (for recursive combinators)
   var rcmbs; // inner combinations lifted to higher towers
   var lcmbs; // potential lowered combinations
+  var llcmbs; // potential reset combinations (lifted after lowered)
   
   // Forward Application
   if (lsyn.con === 'F' && cat_equal(lsyn.targs[1], rsyn)) {
@@ -551,47 +553,6 @@ var combine = function(lsyn, rsyn) {
     }
   }
 
-  // // Right MLift
-  // if (rsyn.con === 'M') {
-  //   cmbs = combine(lsyn, rsyn.targs[0]);
-  //   if (cmbs.length !== 0) {
-  //     rcmbs = cmbs.map(function(cmb) {
-  //       return {
-  //         rule: '(liftM2 ' + cmb.rule + ' (lift L) (mlift R))',
-  //         sem: function(L) {
-  //           return function(R) {
-  //             return function(k) {
-  //               return bind(R)(function(y){return k(cmb.sem(L)(y));});
-  //             };
-  //           };
-  //         },
-  //         cat: {con:'K', targs:[cats.MS, cats.MS, cmb.cat]}
-  //       };
-  //     });
-  //     combs = combs.concat(rcmbs);
-  //   }
-  // }
-  // // Left MLift
-  // if (lsyn.con === 'M') {
-  //   cmbs = combine(lsyn.targs[0], rsyn);
-  //   if (cmbs.length !== 0) {
-  //     rcmbs = cmbs.map(function(cmb) {
-  //       return {
-  //         rule: '(liftM2 ' + cmb.rule + ' (mlift L) (lift R))',
-  //         sem: function(L) {
-  //           return function(R) {
-  //             return function(k) {
-  //               return bind(L)(function(x){return k(cmb.sem(x)(R));});
-  //             };
-  //           };
-  //         },
-  //         cat: {con:'K', targs:[cats.MS, cats.MS, cmb.cat]}
-  //       };
-  //     });
-  //     combs = combs.concat(rcmbs);
-  //   }
-  // }
-
   // Right Unit
   if (lsyn.con === 'F' && lsyn.targs[1].con === 'M' &&
       cat_equal(lsyn.targs[1].targs[0], rsyn)) {
@@ -648,46 +609,30 @@ var combine = function(lsyn, rsyn) {
       }
     }
   });
-
-      // if (c.targs[2].con === 'K' &&
-      //     c.targs[2].targs[1].con === 'M') { // 3-level tower
-      //   if (cat_equal(c.targs[1], c.targs[2].targs[0]) &&
-      //       cat_equal(c.targs[2].targs[1].targs[0], c.targs[2].targs[2])) {
-      //     return {
-      //       rule: '(lower2 $ ' + cmb.rule + ')',
-      //       sem: function(L) {
-      //         return function(R) {
-      //           return cmb.sem(L)(R)(function(m){return m(unit);});
-      //         };
-      //       },
-      //       cat: c.targs[0]
-      //     };
-      //   }
-      //   if (c.targs[2].targs[2].con === 'K' &&
-      //       c.targs[2].targs[2].targs[1].con === 'M') { // 4-level tower
-      //     if (cat_equal(c.targs[1], c.targs[2].targs[0]) &&
-      //         cat_equal(c.targs[2].targs[1], c.targs[2].targs[2].targs[0]) &&
-      //         cat_equal(c.targs[2].targs[2].targs[1].targs[0],
-      //                   c.targs[2].targs[2].targs[2])) {
-      //       return {
-      //         rule: '(lower3 $ ' + cmb.rule + ')',
-      //         sem: function(L) {
-      //          return function(R) {
-      //             return cmb.sem(L)(R)(function(M) {
-      //               return M(function(m){return m(unit);});
-      //             });
-      //           };
-      //         },
-      //         cat: c.targs[0]
-      //       };
-      //     }
-      //   }
-      // }
-    // }
-  // });
-
   // ditch any Lower operations that aren't defined; keep the rest
   combs = combs.concat(lcmbs.filter(function(x){return x;}));
+
+  // Reset
+  llcmbs = combs.map(function(cmb) {
+    var rs = cmb.rule.split(' ');
+    var c = cmb.cat;
+    if (rs[0].indexOf('lower') === 1) {
+      if (c.con === 'M') {
+        return {
+          rule: '(reset1 ' + rs.slice(1).join(' ') + ')',
+          sem: function(L) {
+            return function(R) {
+              return bind(cmb.sem(L)(R));
+            };
+          },
+          cat: {con:'K', targs:[cats.MS, cats.MS, c.targs[0]]}
+        };
+      }
+    }
+  });
+  // ditch any Lower operations that aren't defined; keep the rest
+  combs = combs.concat(llcmbs.filter(function(x){return x;}));
+
   // return the combinations
   return combs;
 };
