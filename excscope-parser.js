@@ -599,73 +599,80 @@ var combine = function(lsyn, rsyn) {
     }]);
   }
 
-  // Lower
-  lcmbs = combs.map(function(cmb) {
-    // plug a continuation into a tower (either id or unit, depending on types)
-    var c = cmb.cat;
-    if (c.con === 'K') {
-      if (cat_equal(c.targs[1], c.targs[2])) {
-      // stateful thing on bottom of 2-level tower (probably);
-      // go ahead and combine two args however they can be combined, then pass
-      // in identity continuation
-        return {
-          rule: '(lower1 $ ' + cmb.rule + ')',
-          // \l r -> cmb.sem l r id
-          sem: function(L) {
-            return function(R) {
-              return cmb.sem(L)(R)(function(m){return m;});
-            };
-          },
-          cat: c.targs[0]
-        };
-      }
-      if (c.con === 'K' && c.targs[1].con == 'M' &&
-          cat_equal(c.targs[1].targs[0], c.targs[2])) {
-        // non-stateful thing on bottom of tower (probably);
-        // combine two args however they can be combined, then pass in unit
-        // continuation
-        return {
-          rule: '(mlower $ ' + cmb.rule + ')',
-          // \l r -> cmb.sem l r unit
-          sem: function(L) {
-            return function(R) {
-              return cmb.sem(L)(R)(unit);
-            };
-          },
-          cat: c.targs[0]
-        };
-      }
-    }
+  var whatevs = combs.map(function(cmb) {
+    var bs = findBinds(cmb.cat);
+    return bs.map(function(b) {
+      return {
+        rule: '(' + b.rule + ' ' + cmb.rule + ')',
+        sem: function(L) {
+          return function(R) {
+            return b.sem(cmb.sem(L)(R));
+          };
+        },
+        cat: b.cat
+      };
+    });
   });
-  // ditch any Lower operations that aren't defined; keep the rest
-  combs = combs.concat(lcmbs.filter(function(x){return x;}));
-
-  // Reset
-  llcmbs = combs.map(function(cmb) {
-    var rs = cmb.rule.split(' ');
-    var c = cmb.cat;
-    if (rs[0].indexOf('lower') === 1) {
-      if (c.con === 'M') {
-        // if tower was just lowered and is now stateful,
-        // pass the two args into cmb.sem (which combines them and lowers the
-        // result), then lift it back up
-        return {
-          rule: '(reset1 ' + rs.slice(1).join(' ') + ')',
-          // \l r k -> cmb.sem l r >>= k
-          sem: function(L) {
-            return function(R) {
-              return bind(cmb.sem(L)(R));
-            };
-          },
-          cat: {con:'K', targs:[cats.MS, cats.MS, c.targs[0]]}
-        };
-      }
-    }
-  });
-  // ditch any Lower operations that aren't defined; keep the rest
-  combs = combs.concat(llcmbs.filter(function(x){return x;}));
+  combs = combs.concat(flatten(whatevs));
 
   // return the combinations
   return combs;
 };
 
+var findBinds = function(c) {
+  var bs = [];
+  if (c.con === 'M') {
+    bs = bs.concat([{
+      rule: 'bind',
+      sem: bind,
+      cat: {con:'K', targs:[cats.MS, cats.MS, c.targs[0]]}
+    }]);
+  }
+  if (c.con === 'K') {
+    bcmbs = findBinds(c.targs[2]);
+    if (bcmbs.length !== 0) {
+      rbcmbs = bcmbs.map(function(bcmb) {
+        return {
+          // \m -> do x <- m
+          //          return (bcmb.rule x)
+          rule: 'liftM $ ' + bcmb.rule,
+          sem: function(m) {
+            return function(k) {
+              return m(function(y){return k(bcmb.sem(y));});
+            };
+          },
+          cat: {con:'K', targs:[c.targs[0], c.targs[1], bcmb.cat]}
+        };
+      });
+      bs = bs.concat(rbcmbs);
+    }
+  }
+  return bs;
+};
+
+var findLowers = function(c) {
+  var ls = [];
+  if (c.con === 'K') {
+    if (c.targs[1].con == 'M' && cat_equal(c.targs[1].targs[0], c.targs[2])) {
+      ls = ls.concat([{
+        rule: 'mlower',
+        sem: unit,
+        cat: c.targs[0]
+      }]);
+    }
+    if (c.targs[2].con === 'K') {
+      lcmbs = findLowers(c.targs[2]);
+      if (lcmbs !== 0) {
+        rlcmbs = lcmbs.map(function(lcmb) {
+          return {
+            rule: 'm' + lcmb.rule,
+            sem: function(m){return m(lcmb.sem);},
+            cat: ''
+          };
+        });
+        ls = ls.concat(rclmbs);
+      }
+    }
+  }
+  return ls;
+};
