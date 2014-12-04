@@ -51,6 +51,12 @@ var truth = function(outputs) {
   return outputs.some(function(o){return o[0];});
 };
 
+// choose a meaning; evaluate it at a particular context and world
+var run = function(meanings, disamb) {
+  disamb = disamb || 0;
+  return meanings[disamb].sem([1,2])(w);
+};
+
 
 /****************************
  * Auxiliary Logic Functions
@@ -499,8 +505,6 @@ var combine = function(lsyn, rsyn) {
   var combs = [];
   var cmbs; // potential inner combinations (for recursive combinators)
   var rcmbs; // inner combinations lifted to higher towers
-  var lcmbs; // potential lowered combinations
-  var llcmbs; // potential reset combinations (lifted after lowered)
   
   // Forward Application
   if (lsyn.con === 'F' && cat_equal(lsyn.targs[1], rsyn)) {
@@ -599,7 +603,23 @@ var combine = function(lsyn, rsyn) {
     }]);
   }
 
-  var whatevs = combs.map(function(cmb) {
+  var lows = combs.map(function(cmb) {
+    var ls = findLowers(cmb.cat);
+    return ls.map(function(l) {
+      return {
+        rule: '(' + l.rule + ' ' + cmb.rule + ')',
+        sem: function(L) {
+          return function(R) {
+            return cmb.sem(L)(R)(l.sem);
+          };
+        },
+        cat: cmb.cat.targs[0]
+      };
+    });
+  });
+  combs = combs.concat(flatten(lows));
+
+  var bins = combs.map(function(cmb) {
     var bs = findBinds(cmb.cat);
     return bs.map(function(b) {
       return {
@@ -613,14 +633,17 @@ var combine = function(lsyn, rsyn) {
       };
     });
   });
-  combs = combs.concat(flatten(whatevs));
+  combs = combs.concat(flatten(bins));
 
   // return the combinations
   return combs;
 };
 
+// return bind combinator of appropriate tower-size, if appropriate
 var findBinds = function(c) {
   var bs = [];
+  var bcmbs;
+  var rbcmbs;
   if (c.con === 'M') {
     bs = bs.concat([{
       rule: 'bind',
@@ -650,8 +673,11 @@ var findBinds = function(c) {
   return bs;
 };
 
+// return lower combinator of appropriate tower-size, if appropriate
 var findLowers = function(c) {
   var ls = [];
+  var lcmbs;
+  var rlcmbs;
   if (c.con === 'K') {
     if (c.targs[1].con == 'M' && cat_equal(c.targs[1].targs[0], c.targs[2])) {
       ls = ls.concat([{
@@ -670,7 +696,7 @@ var findLowers = function(c) {
             cat: ''
           };
         });
-        ls = ls.concat(rclmbs);
+        ls = ls.concat(rlcmbs);
       }
     }
   }
