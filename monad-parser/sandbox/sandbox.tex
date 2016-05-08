@@ -1,0 +1,14 @@
+\documentclass{article}
+\synctex=1
+\usepackage[margin=.8in]{geometry}
+\usepackage{forest,mathtools,newtxtext,newtxmath}
+\newcommand\bs\backslash{}
+\newcommand\sslash{\mathord{/\mkern-5mu/}}
+\newcommand\bbslash{\mathord{\bs\mkern-5.2mu\bs}}
+\begin{document}
+
+\begin{forest}for tree={scale=.8,align=center},where n children=0{tier=word}{}
+[{$\textbf{\textsf{Lower(SR(BA))}} \vdash \textsf{M}t$\\ $\texttt{(>>=)}\, \texttt{smone}\, (\lambda y.\, \texttt{return}\, (\texttt{saw}\, \texttt{$y$}\, (\texttt{the}\, \texttt{boy})))$} [{$\textbf{\textsf{FA}} \vdash e$\\ $\texttt{the}\, \texttt{boy}$} [{$e / n$\\ $\texttt{the}$} [the] ] [{$n$\\ $\texttt{boy}$} [boy] ] ] [{$\textbf{\textsf{$\star$R(SR(FA))}} \vdash \textsf{M}t \sslash ((e \backslash t) \bbslash \textsf{M}t)$\\ $\lambda k.\, \texttt{(>>=)}\, \texttt{smone}\, (\lambda y.\, \texttt{$k$}\, (\texttt{saw}\, \texttt{$y$}))$} [{$(e \backslash t) / e$\\ $\texttt{saw}$} [saw] ] [{$\textsf{M}e$\\ $\texttt{smone}$} [someone] ] ] ]
+\end{forest}\\
+
+\end{document}
