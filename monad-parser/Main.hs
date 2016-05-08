@@ -47,8 +47,9 @@ some' = V "some"
 
 
 toParse :: String
-toParse = "the boy saw someone"
--- toParse = "if [someone saw every elk with the binoculars] [dylan left]"
+-- toParse = "the boy saw someone"
+toParse = "if [someone saw every elk with the binoculars] [dylan left]"
+-- toParse = "[someone saw every elk with the binoculars]"
 
 main :: IO ()
 main = do

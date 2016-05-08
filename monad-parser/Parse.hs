@@ -13,21 +13,20 @@ data Type
   | X
   deriving (Show, Eq)
 
-
 data Tree = Tree {rep :: String, sem :: TypedTerm, sub :: SubTree} deriving (Show)
 data SubTree = Empty | Bin Tree Tree | Phase Tree deriving (Show)
 
 type Sentence = [Tree]
 type TypedTerm = (Exp String, Type)
 
+parse :: (String -> [TypedTerm]) -> String -> [Tree]
+parse dict = tokenize dict >=> ttrees
+
 tokenize :: (String -> [TypedTerm]) -> String -> [Sentence]
 tokenize dict = sequence . map define . words . concatMap spaceSymb
   where define w = [Tree w t Empty | t <- dict w]
-        spaceSymb c = if isAlphaNum c then [c] else " "++[c]++" "
-          -- parse symbols separately, regardless of whitespace
+        spaceSymb c = if isAlphaNum c then [c] else " " ++ c:" "
 
--- parsing
---
 ttrees :: Sentence -> [Tree]
 ttrees [] = []
 ttrees [t] = [t]
@@ -35,28 +34,11 @@ ttrees ts =
     do (ls, rs) <- splits ts
        l <- ttrees ls
        r <- ttrees rs
-       addLowers $ combine l r
+       combine l r >>= addLower
   ++
     do (_, X) <- return $ sem (head ts)
        (_, X) <- return $ sem (last ts)
        filter (evaluated . snd . sem) $ ttrees (init . tail $ ts)
-  -- ++
-  -- [(Phase (Bin w t1 t2), [s]) |
-  --   x <- snd (head ts), y <- snd (last ts), x == X, y == X,
-  --   (ls,rs) <- splits . init . tail $ ts, -- ditch the punctuation
-  --   l <- ttrees ls, r <- ttrees rs,
-  --   (Bin w t1 t2, ss) <- addLowers $ combine l r,
-  --   s <- ss, evaluated s]
-
-parse :: (String -> [TypedTerm]) -> String -> [Tree]
-parse dict = tokenize dict >=> ttrees
-
--- helper functions for parsing
---
-howDeep :: Int
-howDeep = 5
--- wow: the way things are set up guarantees you don't climb higher
--- in the type hierarchy than you need to....?
 
 returnTypes :: [Type]
 returnTypes = iterate M (M T)
@@ -75,29 +57,19 @@ modSplitAt n xs = [(ys,zs) | (ys,zs) <- [splitAt n xs],
   where count x = length . filter ((== Atom x) . fst)
 --}
 
-addLowers :: [Tree] -> [Tree]
-addLowers ttrs = ttrs ++
-  do Tree rp (den, ty) (Bin t1 t2) <- ttrs
-     tl <- tail $ closeUnderLower [ty]
-     return $ Tree ("Lower(" ++ rp ++ ")") (den :@ unit, tl) (Bin t1 t2)
+addLower :: Tree -> [Tree]
+addLower ttr@(Tree rp sm@(dn,ty) (Bin t1 t2))
+  | ty == snd (lower sm) = [ttr]
+  | otherwise            = [ttr, ttr {rep = "Lower("++rp++")", sem = lower sm}]
+addLower ttr             = [ttr]
 
-closeUnder :: Eq a => (a -> a) -> [a] -> [a]
-closeUnder f ts = let new = union ts (map f ts) in
-  if new == ts then ts else closeUnder f new
-
-closeUnderLower :: [Type] -> [Type]
-closeUnderLower = closeUnder lowerType
-
-joinType :: Type -> Type
-joinType (M (M a)) = M a
-joinType t         = t
-
-lowerType :: Type -> Type
-lowerType (a ://: (b :\\: c))
-  | M b == c          = a
-  | lowerType b == c  = a
-  | otherwise         = a ://: (lowerType b :\\: c)
-lowerType t = t
+lower :: TypedTerm -> TypedTerm
+lower (m, (a ://: (b :\\: c)))
+    | M b == c          = (m :@ unit, a)
+    | x == c            = (m :@ ("m" ! t), a)
+    | otherwise         = ("k" ! m :@ ("m" ! V "k" :@ t), a ://: (x :\\: c))
+  where (t, x) = lower (V "m", b)
+lower t                 = t
 
 evaluated :: Type -> Bool
 evaluated (_ ://: _) = False
@@ -106,6 +78,9 @@ evaluated (_ :\: b)  = evaluated b
 evaluated (_ :\\: b) = evaluated b
 evaluated (M a)      = evaluated a
 evaluated _          = True
+
+howDeep :: Int
+howDeep = 5
 
 combine :: Tree -> Tree -> [Tree]
 combine t1@(Tree _ sem1 _) t2@(Tree _ sem2 _) = concat
