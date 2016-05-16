@@ -8,7 +8,7 @@ import Pretty
 --
 lexicon :: String -> [TypedTerm]
 lexicon w
-  | w == "dylan" = [(dylan', E)]
+  | w == "dylan" = [(dylan', M E)]
   | w == "boy" = [(boy', N)]
   | w == "elk" = [(elk', N)]
   | w == "binoculars" = [(binos', N)]
@@ -23,12 +23,13 @@ lexicon w
   | w == "everyone" = [(everyone', M T ://: (E :\\: M T))]
   | w == "every" = [(every', (M T ://: (E :\\: M T)) ://: ((T :/: N) :\\: M T))]
   | w == "some" = [(some', M E ://: ((T :/: N) :\\: M T))]
+  | w == "return" = [(unit, T :\: M T)]
   | w == "[" = [(undefined, X)]
   | w == "]" = [(undefined, X)]
   | otherwise = error "unknown word"
 
 dylan',boy',elk',binos',left',saw' :: Exp String
-dylan' = L (LE Dylan)
+dylan' = Return $ L (LE Dylan)
 boy' = V "boy"
 elk' = V "elk"
 binos' = V "binos"
@@ -48,8 +49,8 @@ some' = V "some"
 
 toParse :: String
 -- toParse = "the boy saw someone"
-toParse = "if [someone saw every elk with the binoculars] [dylan left]"
--- toParse = "[someone saw every elk with the binoculars]"
+-- toParse = "if [someone saw every elk with the binoculars] [dylan left]"
+toParse = "someone left return"
 
 main :: IO ()
 main = do

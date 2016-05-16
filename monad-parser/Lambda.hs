@@ -35,22 +35,18 @@ data Exp a
   | V a
   | Exp a :@ Exp a
   | Lam (Scope (Name String ()) Exp a)
-  | Let [Scope (Name String Int) Exp a] (Scope (Name String Int) Exp a)
+  | Bind (Exp a) (Exp a)
+  | Return (Exp a)
   deriving (Eq,Ord,Show,Read)
 
 lambda :: String -> Exp String -> Exp String
 lambda u b = Lam (abstract1Name u b)
 
-unit :: Exp String
-unit = V "return"
+unit :: Exp a
+unit = fromJust . closed $ "x" ! Return (V"x")
 
-bind :: Exp String
-bind = V "(>>=)"
-
-let_ :: [(String, Exp String)] -> Exp String -> Exp String
-let_ [] b = b
-let_ bs b = Let (map (abstr . snd) bs) (abstr b)
-  where abstr = abstractName (`elemIndex` map fst bs)
+bind :: Exp a -> Exp a -> Exp a
+bind = Bind
 
 deriving instance Functor Exp
 deriving instance Foldable Exp
@@ -64,7 +60,8 @@ instance Traversable Exp where
   traverse f (V a)      = V <$> f a
   traverse f (x :@ y)   = (:@) <$> traverse f x <*> traverse f y
   traverse f (Lam e)    = Lam <$> traverse f e
-  traverse f (Let bs b) = Let <$> traverse (traverse f) bs <*> traverse f b
+  traverse f (Return x) = Return <$> traverse f x
+  traverse f (Bind m k) = Bind <$> traverse f m <*> traverse f k
 
 instance Monad Exp where
   return = V
@@ -72,7 +69,8 @@ instance Monad Exp where
   V a      >>= f = f a
   (x :@ y) >>= f = (x >>= f) :@ (y >>= f)
   Lam e    >>= f = Lam (e >>>= f)
-  Let bs b >>= f = Let (map (>>>= f) bs) (b >>>= f)
+  Return x >>= f = Return (x >>= f)
+  Bind m k >>= f = Bind (m >>= f) (k >>= f)
 
 -- these 4 classes are needed to help Eq, Ord, Show and Read pass through Scope
 instance Eq1 Exp      where (==#)      = (==)
@@ -91,26 +89,15 @@ nf (Lam b) = Lam $ toScope $ nf $ fromScope b
 nf (f :@ a) = case whnf f of
   Lam b -> nf (instantiate1Name a b)
   f' -> nf f' :@ nf a
-nf (Let bs b) = nf (inst b)
-  where es = map inst bs
-        inst = instantiateName (es !!)
+nf (Return x) = Return (nf x)
+nf (Bind (Return x) k) = (nf $ k :@ x)
+nf (Bind (Bind m f) g) = nf $ Bind m (kcomp :@ f :@ g)
+  where kcomp = fromJust . closed $ "f" ! "g" ! "x" ! Bind (V"f" :@ V"x") (V"g")
+nf (Bind m k@(Lam b)) = case nf (fromScope b) of
+  Return (V (B{})) -> nf m
+  _ -> Bind (nf m) (nf k)
+nf (Bind m k) = Bind (nf m) (nf k)
 
-{--}
-nfTrace :: Monad m => (Exp a -> m ()) -> Exp a -> m (Exp a)
-nfTrace k e@L{}   = return e
-nfTrace k e@V{}   = return e
-nfTrace k (Lam b) = (Lam . toScope) <$> nfTrace (k . Lam . toScope) (fromScope b)
-nfTrace k (f :@ a) =
-  let tracedF = whnfTrace (k . (:@ a)) f
-      test = \exp -> case exp of
-        Lam b -> csubst k a (Lam b) >>= nfTrace k
-        f' -> liftM2 (:@) (nfTrace k f') (nfTrace k a)
-  in tracedF >>= test
--- nfTrace (Let bs b) = nf (inst b)
---   where es = map inst bs
---         inst = instantiateName (es !!)
-
-  
 {--}
 whnf :: Exp a -> Exp a
 whnf e@L{}   = e
@@ -119,31 +106,22 @@ whnf e@Lam{} = e
 whnf (f :@ a) = case whnf f of
   Lam b -> whnf (instantiate1Name a b)
   f'    -> f' :@ a
-whnf (Let bs b) = whnf (inst b)
-  where es = map inst bs
-        inst = instantiateName (es !!)
-
-whnfTrace :: Monad m => (Exp a -> m ()) -> Exp a -> m (Exp a)
-whnfTrace k e@L{}   = return e
-whnfTrace k e@V{}   = return e
-whnfTrace k e@Lam{} = return e
-whnfTrace k (f :@ a) =
-  let tracedF = whnfTrace (k . (:@ a)) f
-      test = \exp -> case exp of
-        Lam b -> csubst k a (Lam b) >>= whnfTrace k 
-        f'    -> return (f' :@ a)
-  in tracedF >>= test
--- whnfSteps (Let bs b) = whnf (inst b)
---   where es = map inst bs
---         inst = instantiateName (es !!)
+whnf (Return x) = Return (whnf x)
+whnf (Bind (Return x) k) = (whnf $ k :@ x)
+whnf (Bind (Bind m f) g) = whnf $ Bind m (kcomp :@ f :@ g)
+  where kcomp = fromJust . closed $ "f" ! "g" ! "x" ! Bind (V"f" :@ V"x") (V"g")
+whnf (Bind m k@(Lam b)) = case fromScope b of
+  Return (V (B{})) -> whnf m
+  _ -> Bind (nf m) (nf k)
+whnf (Bind m k) = Bind (whnf m) (whnf k)
 
 {--}
 infixr 0 !
 (!) :: String -> Exp String -> Exp String
 x ! t = lambda x t
 
-fromLex :: [(String, Exp String)] -> Exp String -> Exp a
-fromLex lexicon = fromJust . closed . let_ lexicon
+-- fromLex :: [(String, Exp String)] -> Exp String -> Exp a
+-- fromLex lexicon = fromJust . closed . let_ lexicon
 
 
 --}

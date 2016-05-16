@@ -65,7 +65,7 @@ addLower ttr             = [ttr]
 
 lower :: TypedTerm -> TypedTerm
 lower (m, (a ://: (b :\\: c)))
-    | M b == c          = (m :@ unit, a)
+    | M b == c          = (m :@ ("x" ! unit :@ V"x"), a)
     | x == c            = (m :@ ("m" ! t), a)
     | otherwise         = ("k" ! m :@ ("m" ! V "k" :@ t), a ://: (x :\\: c))
   where (t, x) = lower (V "m", b)
@@ -116,13 +116,13 @@ combine t1@(Tree _ sem1 _) t2@(Tree _ sem2 _) = concat
 
   , do (l, M t) <- return sem1
        rt <- take howDeep returnTypes
-       let bt1 = t1 {sem = (bind :@ l, rt ://: (t :\\: rt))}
+       let bt1 = t1 {sem = ("f" ! bind l (V"f"), rt ://: (t :\\: rt))}
        (Tree rp (dn,ty) (Bin _ _)) <- combine bt1 t2
        return $ Tree ("$\\star$L("++rp++")") (dn,ty) (Bin t1 t2)
 
   , do (r, M t) <- return sem2
        rt <- take howDeep returnTypes
-       let bt2 = t2 {sem = (bind :@ r, rt ://: (t :\\: rt))}
+       let bt2 = t2 {sem = ("f" ! bind r (V"f"), rt ://: (t :\\: rt))}
        (Tree rp (dn,ty) (Bin _ _)) <- combine t1 bt2
        return $ Tree ("$\\star$R("++rp++")") (dn,ty) (Bin t1 t2)
   ]

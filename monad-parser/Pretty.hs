@@ -60,7 +60,8 @@ prettyPrec _      d n (L l)      = showString (show l)
 prettyPrec _      d n (V a)      = showString ("\\texttt{" ++ a ++ "}")
 prettyPrec vs     d n (x :@ y)   = showParen d $ 
   case x of
-    (Lam b) -> prettyPrec vs True n x . showString "\\, " . prettyPrec vs True n y
+    Lam{} -> prettyPrec vs True n x . showString "\\, " . prettyPrec vs True n y
+    Bind{} -> prettyPrec vs True n x . showString "\\, " . prettyPrec vs True n y
     _       -> prettyPrec vs False n x . showString "\\, " . prettyPrec vs True n y
 prettyPrec (v:vs) d n (Lam b)    = showParen d $ 
   showString "\\lambda " . showString u . showString ".\\, "
@@ -68,13 +69,12 @@ prettyPrec (v:vs) d n (Lam b)    = showParen d $
   where u = case bindings b of
               [] -> v
               l  -> name $ head l
-prettyPrec vs     d n (Let bs b) = showParen d $ 
-  showString "let" .  foldr (.) id (zipWith showBinding xs bs) .
-  showString " in " . indent . prettyPrec ys False n (inst b)
-  where (xs,ys) = splitAt (length bs) vs
-        inst = instantiateName (\n -> V (xs !! n))
-        indent = showString ('\n' : replicate (n + 4) ' ')
-        showBinding x b = indent . showString x . showString " = " . prettyPrec ys False (n + 4) (inst b)
+prettyPrec vs     d n (Return x) = prettyPrec vs d n (V"$\\eta$" :@ x)
+prettyPrec vs     d n (Bind m k) = showParen d $
+  case m of
+    Lam{} -> prettyPrec vs True n m . showString "\\star" . prettyPrec vs False n k
+    Bind{} -> prettyPrec vs True n m . showString "\\star" . prettyPrec vs False n k
+    _ -> prettyPrec vs False n m . showString "\\star" . prettyPrec vs False n k
 
 prettyWith :: [String] -> Exp String -> String
 prettyWith vs t = prettyPrec (filter (`notElem` toList t) vs) False 0 t ""
