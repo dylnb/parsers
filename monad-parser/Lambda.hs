@@ -90,13 +90,15 @@ nf (f :@ a) = case whnf f of
   Lam b -> nf (instantiate1Name a b)
   f' -> nf f' :@ nf a
 nf (Return x) = Return (nf x)
-nf (Bind (Return x) k) = (nf $ k :@ x)
-nf (Bind (Bind m f) g) = nf $ Bind m (kcomp :@ f :@ g)
+nf (Bind m k) =
+  case (nf m, nf k) of
+    (Return x, k') -> nf $ k' :@ x
+    (Bind m' g, h) -> nf $ Bind m' (kcomp :@ g :@ h)
+    (m', k'@(Lam b)) -> case nf (fromScope b) of
+                          Return (V (B{})) -> m'
+                          _ -> Bind m' k'
+    (m', k') -> Bind m' k'
   where kcomp = fromJust . closed $ "f" ! "g" ! "x" ! Bind (V"f" :@ V"x") (V"g")
-nf (Bind m k@(Lam b)) = case nf (fromScope b) of
-  Return (V (B{})) -> nf m
-  _ -> Bind (nf m) (nf k)
-nf (Bind m k) = Bind (nf m) (nf k)
 
 {--}
 whnf :: Exp a -> Exp a
@@ -107,13 +109,15 @@ whnf (f :@ a) = case whnf f of
   Lam b -> whnf (instantiate1Name a b)
   f'    -> f' :@ a
 whnf (Return x) = Return (whnf x)
-whnf (Bind (Return x) k) = (whnf $ k :@ x)
-whnf (Bind (Bind m f) g) = whnf $ Bind m (kcomp :@ f :@ g)
+whnf (Bind m k) =
+  case (whnf m, whnf k) of
+    (Return x, k') -> whnf $ k' :@ x
+    (Bind m' g, h) -> whnf $ Bind m' (kcomp :@ g :@ h)
+    (m', k'@(Lam b)) -> case fromScope b of
+                          Return (V (B{})) -> m'
+                          _ -> Bind m' k'
+    (m', k') -> Bind m' k'
   where kcomp = fromJust . closed $ "f" ! "g" ! "x" ! Bind (V"f" :@ V"x") (V"g")
-whnf (Bind m k@(Lam b)) = case fromScope b of
-  Return (V (B{})) -> whnf m
-  _ -> Bind (nf m) (nf k)
-whnf (Bind m k) = Bind (whnf m) (whnf k)
 
 {--}
 infixr 0 !
