@@ -1,0 +1,6 @@
+flags: {}
+packages: []
+system-ghc: false
+extra-deps: []
+resolver: lts-6.30
+allow-newer: true

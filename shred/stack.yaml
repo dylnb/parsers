@@ -1,0 +1,59 @@
+flags: {}
+
+# resolver: lts-6.15
+# compiler: ghcjs-0.2.0.9006015_ghc-7.10.3
+#
+# compiler-check: match-exact
+#
+# setup-info:
+#   ghcjs:
+#     source:
+#       ghcjs-0.2.0.9006015_ghc-7.10.3:
+#          url: "http://tolysz.org/ghcjs/lts-6.15-9006015.tar.gz"
+#          sha1: 4d513006622bf428a3c983ca927837e3d14ab687
+
+resolver: lts-6.30
+compiler: ghcjs-0.2.0.9006030_ghc-7.10.3
+compiler-check: match-exact
+
+setup-info:
+  ghcjs:
+    source:
+      ghcjs-0.2.0.9006030_ghc-7.10.3:
+         url: http://ghcjs.tolysz.org/lts-6.30-9006030.tar.gz
+         sha1: 2371e2ffe9e8781808b7a04313e6a0065b64ee51
+
+allow-newer: true
+
+packages:
+- location: '.'
+- location:
+    git: https://github.com/ryantrinkle/reflex.git
+    commit: f8338f6b68c9be4e8dcddbbab2098aeffa018535
+  extra-dep: true
+
+- location: 
+    git: https://github.com/ryantrinkle/reflex-dom.git
+    commit: e133d53aeb9a7c36702c8720ad4e5c40e004f0b8
+  extra-dep: true
+- location:
+     git: https://github.com/isomorphism/these.git
+     commit: cf68c46bd049d23938f351da5618e9a09ef1102c
+# - location:
+#      git: https://github.com/reflex-frp/reflex-dom-contrib.git
+#      commit: d07180518168fb68a9ac2ec2df71f670e8d85e6b
+#   extra-dep: true
+
+
+# Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
+extra-deps:
+- repline-0.1.6.0
+- pretty-tree-0.1.0.0
+- ref-tf-0.4.0.1
+
+# Override default flag values for local packages and extra-deps
+flags: {}
+
+# Extra package databases containing global packages
+extra-package-dbs: []
+
