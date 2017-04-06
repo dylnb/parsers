@@ -1,12 +1,50 @@
-<!DOCTYPE html>
+<!DOCTYPE>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <script language="javascript" src="rts.js"></script>
-    <script language="javascript" src="lib.js"></script>
-    <script language="javascript" src="out.js"></script>
-  </head>
-  <body>
-  </body>
-  <script language="javascript" src="runmain.js" defer></script>
+<head>
+  <title>cytoscape-dagre.js demo</title>
+  <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1">
+  <script src="http://code.jquery.com/jquery-2.0.3.min.js"></script>
+  <script src="http://cytoscape.github.io/cytoscape.js/api/cytoscape.js-latest/cytoscape.min.js"></script>
+  <script src="https://cdn.rawgit.com/cpettitt/dagre/v0.7.4/dist/dagre.js"></script>
+  <script src="../cytoscape-dagre.js"></script>
+  <script language="javascript" src="rts.js"></script>
+  <script language="javascript" src="lib.js"></script>
+  <script language="javascript" src="out.js"></script>
+  <style>
+    body { font-family: helvetica; font-size: 14px; overflow-x: hidden; }
+    #cy { width: 100%;  height: 100%;  position: absolute;  top: 100px; }
+    #cy > div { width: 50%;  height: 50%;  }
+    #infocol { width: 35%; height: 45%;  position: fixed;  top: 100px;
+      left: 60%; opacity: 0.5; font-size: 1em; z-index: 999; }
+    #search-wrapper { position: absolute; z-index: 999; width: 50%; }
+    #inc-box { margin-left: 52%; }
+    hr.treebreak { background-color: #fff; border-top: 2px dashed #8c8b8b;
+      margin: 0; width: 50%; }
+    #lex { height: 30%;  overflow: auto; }
+    #lex > span { display: block; }
+    #reductions { height: 30%; overflow: auto; }
+    p:first-child { margin-top: 0; }
+    @media (max-width: 500px) {
+      #cy { width: 96%; overflow-y: auto; }
+      #cy > div { width: 90%; height: 90%; }
+      #cy::-webkit-scrollbar { width: 12px !important; }
+      #cy::-webkit-scrollbar-track {
+         -webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.3) !important;
+         -webkit-border-radius: 10px !important;
+         border-radius: 10px !important;
+      }
+      #cy::-webkit-scrollbar-thumb {
+         -webkit-border-radius: 10px !important;
+         border-radius: 10px !important;
+         background: #41617D !important; 
+         -webkit-box-shadow: inset 0 0 6px rgba(0,0,0,0.5) !important; 
+      }
+      #cy::-webkit-scrollbar-thumb:window-inactive { background: #41617D !important; }
+      hr.treebreak { width: 100%; }
+      #infocol { display: none; } }
+  </style>
+</head>
+<body>
+</body>
+<script language="javascript" src="runmain.js" defer></script>
 </html>
