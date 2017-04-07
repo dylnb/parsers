@@ -20,7 +20,7 @@ ghc-prim:                25792
 ghcjs_210XEgjDa5q074bipEhzRA:17362
 ghcjs_9jpamHTyFf8CL10DbS4jxv:11753
 integer-gmp:             21972
-main:                    442588
+main:                    441969
 text_AoFu0I23s11C5sDmOoIAPZ:19959
 trans_EziP6JoSSK398q9vuXpnAA:16607
 
@@ -184,9 +184,9 @@ integer-gmp
 main
     JSUtils:                            67962
     Lambda:                             127296
-    Lexicon:                            1579
-    Main:                               144504
-    Parse:                              68685
+    Lexicon:                            1246
+    Main:                               144501
+    Parse:                              68402
     Pretty:                             32562
 
 text_AoFu0I23s11C5sDmOoIAPZ
@@ -202,5 +202,5 @@ trans_EziP6JoSSK398q9vuXpnAA
 
 
 
-packed metadata: 446867
+packed metadata: 446514
 
