@@ -5,7 +5,7 @@
 module JSUtils where
 
 import Parse
-import Lexicon
+-- import Lexicon
 import Pretty (prettyExp)
 import Lambda
 

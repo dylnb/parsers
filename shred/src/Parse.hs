@@ -6,6 +6,7 @@ import Data.Char
 import Data.List
 import Lambda
 import Control.Monad
+import Data.Maybe (mapMaybe)
 import Data.Function (on)
 import Control.Arrow ((***))
 
@@ -39,15 +40,16 @@ ctrees = \c -> do
   c' <- step c
   if on (==) (length *** length) c c' then return c' else ctrees c'
   
-parse :: (String -> [TypedTerm]) -> String -> [Tree]
+parse :: (String -> Maybe [TypedTerm]) -> String -> [Tree]
 parse dict s = map (head . fst) $ filter finished tests
   where tests = ([],) <$> tokenize dict s >>= ctrees
         finished (ts, buff) = length ts == 1 && null buff
 
-tokenize :: (String -> [TypedTerm]) -> String -> [Sentence]
-tokenize dict = sequence . map define . words . concatMap spaceSymb
-  where define w = [Tree w t Empty | t <- dict w]
-        spaceSymb c = if isAlphaNum c then [c] else " " ++ c:" "
+tokenize :: (String -> Maybe [TypedTerm]) -> String -> [Sentence]
+tokenize dict = sequence . mapMaybe define . words . concatMap spaceSymb
+  where define w = (map $ flip (Tree w) Empty) <$> dict w
+        spaceSymb c | isAlphaNum c = [c]
+                    | otherwise    = " " ++ [c] ++ " "
 
 returnTypes :: [Type]
 returnTypes = iterate M (M T)

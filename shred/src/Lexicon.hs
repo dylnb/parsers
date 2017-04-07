@@ -6,8 +6,8 @@ import Pretty
 
 -- lexicon
 --
-lexicon :: String -> [TypedTerm]
-lexicon w = maybe (error "unknown word") id (lookup w lxcn)
+lexicon :: String -> Maybe [TypedTerm]
+lexicon = flip lookup lxcn
 
 lxcn :: [(String, [TypedTerm])]
 lxcn = 
