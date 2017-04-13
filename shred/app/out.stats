@@ -20,7 +20,7 @@ ghc-prim:                25792
 ghcjs_210XEgjDa5q074bipEhzRA:17362
 ghcjs_9jpamHTyFf8CL10DbS4jxv:11753
 integer-gmp:             21972
-main:                    441969
+main:                    441961
 text_AoFu0I23s11C5sDmOoIAPZ:19959
 trans_EziP6JoSSK398q9vuXpnAA:16607
 
@@ -182,7 +182,7 @@ integer-gmp
     GHC.Integer.Type:                   21639
 
 main
-    JSUtils:                            67962
+    JSUtils:                            67954
     Lambda:                             127296
     Lexicon:                            1246
     Main:                               144501

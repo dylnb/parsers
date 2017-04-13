@@ -56,7 +56,7 @@ foreign import javascript unsafe
       \edges: $3\
     \}\
   \}).fit().userZoomingEnabled(true).on('tap', 'node', function(e) {\
-    \$4(parseInt(e.cyTarget.id().substring(1)));\
+    \$4(parseInt(e.target.id().substring(1)));\
   \});"
   cyto :: Int -> JS.Value -> JS.Value -> Callback (JSVal -> IO ()) -> IO ()
 

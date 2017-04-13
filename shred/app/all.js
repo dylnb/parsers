@@ -81168,7 +81168,7 @@ function h$$aBm()
   userZoomingEnabled(true).
   on("tap", "node", (function(e)
                      {
-                       f(parseInt(e.cyTarget.id().substring(1)));
+                       f(parseInt(e.target.id().substring(1)));
                      }));
   h$r3 = d;
   h$r2 = c;
@@ -81365,7 +81365,7 @@ function h$$aBA()
   userZoomingEnabled(true).
   on("tap", "node", (function(e)
                      {
-                       f(parseInt(e.cyTarget.id().substring(1)));
+                       f(parseInt(e.target.id().substring(1)));
                      }));
   h$r3 = b;
   h$r2 = c;
@@ -81486,7 +81486,7 @@ function h$$aBN()
   userZoomingEnabled(true).
   on("tap", "node", (function(e)
                      {
-                       f(parseInt(e.cyTarget.id().substring(1)));
+                       f(parseInt(e.target.id().substring(1)));
                      }));
   h$r1 = h$ghczmprimZCGHCziTupleziZLZR;
   return h$stack[h$sp];
@@ -82154,7 +82154,7 @@ function h$$aCS()
   userZoomingEnabled(true).
   on("tap", "node", (function(e)
                      {
-                       c(parseInt(e.cyTarget.id().substring(1)));
+                       c(parseInt(e.target.id().substring(1)));
                      }));
   h$r1 = h$ghczmprimZCGHCziTupleziZLZR;
   return h$stack[h$sp];
